@@ -27,13 +27,97 @@ RANK = int(os.getenv('RANK', -1))
 matplotlib.rc('font', **{'size': 11})
 matplotlib.use('Agg')  # for writing to files only
 
+def draw_elipse_boxes(image, start, end, color, alpha=0.8):
+    x1,y1 = start
+    x2,y2 = end
+    thickness = 4
+    overlay = image.copy()
+    d = min(int((x2-x1)* 0.2), int((y2-y1)* 0.2))
+    r = min(d - 1, 10)
+    # Top left
+    cv2.line(overlay, (x1 + r, y1), (x1 + r + d, y1), color, thickness)
+    cv2.line(overlay, (x1, y1 + r), (x1, y1 + r + d), color, thickness)
+    cv2.ellipse(overlay, (x1 + r, y1 + r), (r, r), 180, 0, 90, color, thickness)
+    # Top right
+    cv2.line(overlay, (x2 - r, y1), (x2 - r - d, y1), color, thickness)
+    cv2.line(overlay, (x2, y1 + r), (x2, y1 + r + d), color, thickness)
+    cv2.ellipse(overlay, (x2 - r, y1 + r), (r, r), 270, 0, 90, color, thickness)
+    # Bottom left
+    cv2.line(overlay, (x1 + r, y2), (x1 + r + d, y2), color, thickness)
+    cv2.line(overlay, (x1, y2 - r), (x1, y2 - r - d), color, thickness)
+    cv2.ellipse(overlay, (x1 + r, y2 - r), (r, r), 90, 0, 90, color, thickness)
+    # Bottom right
+    cv2.line(overlay, (x2 - r, y2), (x2 - r - d, y2), color, thickness)
+    cv2.line(overlay, (x2, y2 - r), (x2, y2 - r - d), color, thickness)
+    cv2.ellipse(overlay, (x2 - r, y2 - r), (r, r), 0, 0, 90, color, thickness)
+    cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, image)
+
+    overlay = image.copy()
+    cv2.rectangle(overlay, start, end, color, -1)
+    cv2.addWeighted(overlay, alpha * 0.2, image, 1 - alpha * 0.2, 0, image)
+
+CUSTOM_FONT = os.path.join(CONFIG_DIR, 'Nunito.ttf')
+def draw_label(image, start, end, label, color, alpha=0):
+    x1, y1 = start
+    x2, y2 = end
+    d = min(int((x2-x1)* 0.2), int((y2-y1)* 0.2))
+    r = min(d - 1, 10)
+
+    max_width = x2 - x1 - 2 * (d + r + 10)
+
+    scale, thickness = get_optimal_font_scale(label, max_width)
+    if scale is None:
+        return
+
+    overlay = image.copy()
+    text_width, text_height = cv2.getTextSize(label, 0, fontScale=scale, thickness=thickness)[0]
+
+    w = x2 - x1
+    x1 += int(w / 2 - text_width / 2 - 10)
+    x2 -= int(w / 2 - text_width / 2 - 10)
+    y2 = int(y1 + text_height / 2 + 5)
+    y1 -= int(text_height / 2 + 5)
+
+    cv2.rectangle(image, (x1, y1), (x2, y2), color, -1, cv2.LINE_AA)
+    cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, image)
+
+
+    # cv2.putText(image, label, (int(x1 + (x2 - x1) / 2 - text_width / 2), y2 - 5), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=scale, thickness=thickness, color=(255, 255, 255))  
+    # ft = cv2.freetype.createFreeType2()
+    # ft = freetype.Face(CUSTOM_FONT)
+    # ft.loadFontData(fontFileName=CUSTOM_FONT)
+    # lw = max(round(sum(image.shape) / 2 * 0.003), 2)  # line width
+    # tf = max(lw - 1, 1)  # font thickness
+    # textsize = cv2.getTextSize(label, 0, fontScale=lw / 3, thickness=tf)[0]  # text width, height
+    # # outside = p1[1] - h >= 3
+    # # p2 = p1[0] + w, p1[1] - h - 3 if outside else p1[1] + h + 3
+    # # cv2.rectangle(self.im, p1, p2, color, -1, cv2.LINE_AA)  # filled
+    # txt_color=(255, 255, 255)
+    # center = left + arc + margin + w / 2
+    # cv2.putText(image,
+    #             label, (center - textsize[0] / 2, bottom + textsize[1] / 2),
+    #             0,
+    #             lw / 3,
+    #             txt_color,
+    #             thickness=tf,
+    #             lineType=cv2.LINE_AA)
+
+def get_optimal_font_scale(text, width):
+    for thickness in range(2, 1, -1):
+        for scale in range(20, 1, -1):
+            textSize = cv2.getTextSize(text, fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=scale / 10, thickness=thickness)
+            new_width = textSize[0][0]
+            if (new_width < width):
+                return (scale / 10, thickness)
+    return None, None
 
 class Colors:
     # Ultralytics color palette https://ultralytics.com/
     def __init__(self):
         # hex = matplotlib.colors.TABLEAU_COLORS.values()
-        hexs = ('FF3838', 'FF9D97', 'FF701F', 'FFB21D', 'CFD231', '48F90A', '92CC17', '3DDB86', '1A9334', '00D4BB',
-                '2C99A8', '00C2FF', '344593', '6473FF', '0018EC', '8438FF', '520085', 'CB38FF', 'FF95C8', 'FF37C7')
+        # hexs = ('FF3838', 'FF9D97', 'FF701F', 'FFB21D', 'CFD231', '48F90A', '92CC17', '3DDB86', '1A9334', '00D4BB',
+        #         '2C99A8', '00C2FF', '344593', '6473FF', '0018EC', '8438FF', '520085', 'CB38FF', 'FF95C8', 'FF37C7')
+        hexs = ('9667D2', '8048C8', '6C35B2', '592C93', '462273')
         self.palette = [self.hex2rgb(f'#{c}') for c in hexs]
         self.n = len(self.palette)
 
@@ -48,6 +132,13 @@ class Colors:
 
 colors = Colors()  # create instance for 'from utils.plots import colors'
 
+def get_optimal_pil_font(font, label, max_width, min_size=12, max_size=32):
+    for size in range(max_size, min_size, -1):
+        f = check_pil_font(font, size)
+        w, h = f.getsize(label)
+        if (w < max_width):
+            return f
+    return None
 
 def check_pil_font(font=FONT, size=10):
     # Return a PIL TrueType Font, downloading to CONFIG_DIR if necessary
@@ -74,42 +165,46 @@ class Annotator:
         if self.pil:  # use PIL
             self.im = im if isinstance(im, Image.Image) else Image.fromarray(im)
             self.draw = ImageDraw.Draw(self.im)
-            self.font = check_pil_font(font='Arial.Unicode.ttf' if non_ascii else font,
-                                       size=font_size or max(round(sum(self.im.size) / 2 * 0.035), 12))
         else:  # use cv2
             self.im = im
-        self.lw = line_width or max(round(sum(im.shape) / 2 * 0.003), 2)  # line width
+        self.lw = 4 # line_width or max(round(sum(im.shape) / 2 * 0.003), 4)  # line width
 
     def box_label(self, box, label='', color=(128, 128, 128), txt_color=(255, 255, 255)):
         # Add one xyxy box to image with label
         if self.pil or not is_ascii(label):
-            self.draw.rectangle(box, width=self.lw, outline=color)  # box
-            if label:
-                w, h = self.font.getsize(label)  # text width, height
-                outside = box[1] - h >= 0  # label fits outside box
-                self.draw.rectangle(
-                    (box[0], box[1] - h if outside else box[1], box[0] + w + 1,
-                     box[1] + 1 if outside else box[1] + h + 1),
-                    fill=color,
-                )
-                # self.draw.text((box[0], box[1]), label, fill=txt_color, font=self.font, anchor='ls')  # for PIL>8.0
-                self.draw.text((box[0], box[1] - h if outside else box[1]), label, fill=txt_color, font=self.font)
+            box_w = int(box[2]-box[0])
+            box_h = int(box[3]-box[1])
+            box_image=Image.new('RGBA', (box_w, box_h))
+            box_image_draw = ImageDraw.Draw(box_image)
+            d = min(int(box_w * 0.2), int(box_h * 0.2))
+            r = min(d - 1, 12)
+            m = 10
+            box_image_draw.rounded_rectangle((0, 0, box_w, box_h), width=self.lw, outline=color, radius=r, fill=(*color, 50))
+            box_image_draw.line((0 + r + d, 0, box_w - r - d, 0), fill=255, width=self.lw * 2)
+            box_image_draw.line((box_w, 0 + r + d, box_w, box_h - r - d), fill=255, width=self.lw * 2)
+            box_image_draw.line((0 + r + d, box_h, box_w - r - d, box_h), fill=255, width=self.lw * 2)
+            box_image_draw.line((0, 0 + r + d, 0, box_h - r - d), fill=255, width=self.lw * 2)
+            # box_image_draw.line((0 + r + d, 0, int(box[2]-box[0]) - r - d, 0), fill=255, width=self.lw * 2)
+            # box_image_draw.line((0 + r + d, 0, int(box[2]-box[0]) - r - d, 0), fill=255, width=self.lw * 2)
+            # self.draw.rounded_rectangle(box, width=self.lw, outline=color, radius=12, fill=color)  # box
+            self.im.paste(box_image, (int(box[0]), int(box[1])), mask=box_image)
+            self.draw = ImageDraw.Draw(self.im)
+            if not label or (box[2] - box[0] - r - 2 * m) < 0:
+                return
+            f = get_optimal_pil_font('Nunito.ttf', label, box[2] - box[0] - r - 2 * m)
+            if f is None:
+                return
+            w, h = f.getsize(label)
+            x1 = int(box[2] - (box[2] - box[0] + w) / 2) - 5
+            x2 = int(box[0] + (box[2] - box[0] + w) / 2) + 5
+            y1 = int(box[1] - h / 2)
+            y2 = int(box[1] + h / 2)
+            self.draw.rounded_rectangle((x1, y1, x2, y2), radius=4, fill=color)
+            self.draw.text((x1 + w/2 + 5, y1+h/2), label, fill=txt_color, font=f, anchor='mm')
         else:  # cv2
             p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
-            cv2.rectangle(self.im, p1, p2, color, thickness=self.lw, lineType=cv2.LINE_AA)
-            if label:
-                tf = max(self.lw - 1, 1)  # font thickness
-                w, h = cv2.getTextSize(label, 0, fontScale=self.lw / 3, thickness=tf)[0]  # text width, height
-                outside = p1[1] - h >= 3
-                p2 = p1[0] + w, p1[1] - h - 3 if outside else p1[1] + h + 3
-                cv2.rectangle(self.im, p1, p2, color, -1, cv2.LINE_AA)  # filled
-                cv2.putText(self.im,
-                            label, (p1[0], p1[1] - 2 if outside else p1[1] + h + 2),
-                            0,
-                            self.lw / 3,
-                            txt_color,
-                            thickness=tf,
-                            lineType=cv2.LINE_AA)
+            draw_elipse_boxes(self.im, p1, p2, color)
+            draw_label(self.im, p1, p2, label.upper(), color)
 
     def rectangle(self, xy, fill=None, outline=None, width=1):
         # Add rectangle to image (PIL-only)
@@ -215,7 +310,7 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
 
     # Annotate
     fs = int((h + w) * ns * 0.01)  # font size
-    annotator = Annotator(mosaic, line_width=round(fs / 10), font_size=fs, pil=True, example=names)
+    annotator = Annotator(mosaic, line_width=round(fs / 10), font_size=fs, pil=False, example=names)
     for i in range(i + 1):
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
         annotator.rectangle([x, y, x + w, y + h], None, (255, 255, 255), width=2)  # borders
